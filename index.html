@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Log Analyzer - Python Tool</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #333; line-height: 1.6; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        header { background: white; border-radius: 10px; padding: 40px; margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
+        h1 { color: #667eea; font-size: 2.5em; margin-bottom: 10px; }
+        .subtitle { color: #666; font-size: 1.2em; }
+        .section { background: white; border-radius: 10px; padding: 30px; margin-bottom: 20px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+        h2 { color: #667eea; margin-bottom: 20px; border-bottom: 3px solid #667eea; padding-bottom: 10px; }
+        pre { background: #f4f4f4; padding: 20px; border-radius: 5px; overflow-x: auto; border-left: 4px solid #667eea; }
+        code { font-family: 'Courier New', monospace; font-size: 0.9em; }
+        .feature { display: inline-block; background: #667eea; color: white; padding: 8px 15px; border-radius: 20px; margin: 5px; font-size: 0.9em; }
+        .download-btn { display: inline-block; background: #667eea; color: white; padding: 15px 30px; border-radius: 5px; text-decoration: none; font-weight: bold; margin: 10px 5px; transition: 0.3s; }
+        .download-btn:hover { background: #764ba2; transform: translateY(-2px); }
+        ul { margin-left: 20px; margin-top: 10px; }
+        li { margin: 8px 0; }
+        .code-block { margin: 15px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🔍 Test Log Analyzer</h1>
+            <p class="subtitle">Python tool for analyzing test logs, extracting statistics, and grouping similar failures</p>
+        </header>
+
+        <div class="section">
+            <h2>✨ Features</h2>
+            <span class="feature">Multi-Format Support</span>
+            <span class="feature">Pass/Fail Statistics</span>
+            <span class="feature">Failure Grouping</span>
+            <span class="feature">JSON Export</span>
+            <span class="feature">Smart Similarity Detection</span>
+            <span class="feature">No Dependencies</span>
+        </div>
+
+        <div class="section">
+            <h2>📥 Download Code</h2>
+            <p>Get the complete Python tool with all files:</p>
+            <div class="code-block">
+                <h3>1. Main Analyzer (log_analyzer.py)</h3>
+                <pre><code>#!/usr/bin/env python3
+import re
+import json
+from collections import defaultdict
+from difflib import SequenceMatcher
+
+class TestLogAnalyzer:
+    def __init__(self, similarity_threshold=0.7):
+        self.similarity_threshold = similarity_threshold
+        self.test_results = []
+        self.failure_groups = defaultdict(list)
+        
+    def parse_log_file(self, log_file_path: str):
+        with open(log_file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        self._parse_pytest_format(content)
+        self._parse_junit_format(content)
+        self._parse_generic_format(content)
+        
+    def _parse_pytest_format(self, content: str):
+        pattern = r'([\w/\.]+)::(\w+)::(\w+)\s+(PASSED|FAILED)'
+        matches = re.finditer(pattern, content)
+        for match in matches:
+            test_file, test_suite, test_case, status = match.groups()
+            failure_reason = None
+            if status == 'FAILED':
+                failure_reason = self._extract_failure_reason(content, match.end())
+            self.test_results.append({
+                'test_suite_id': f"{test_file}::{test_suite}",
+                'test_case_id': test_case,
+                'status': status,
+                'failure_reason': failure_reason
+            })
+    
+    def _parse_junit_format(self, content: str):
+        pattern = r'\[(\w+)\]\s+(\w+):\s+(PASS|FAIL)'
+        matches = re.finditer(pattern, content)
+        for match in matches:
+            test_suite, test_case, status = match.groups()
+            status = 'PASSED' if status == 'PASS' else 'FAILED'
+            failure_reason = None
+            if status == 'FAILED':
+                failure_reason = self._extract_failure_reason(content, match.end())
+            self.test_results.append({
+                'test_suite_id': test_suite,
+                'test_case_id': test_case,
+                'status': status,
+                'failure_reason': failure_reason
+            })
+    
+    def _parse_generic_format(self, content: str):
+        pattern = r'Test:\s+([\w\.]+)\.(\w+)\s+-\s+(PASSED|FAILED)'
+        matches = re.finditer(pattern, content)
+        for match in matches:
+            test_suite, test_case, status = match.groups()
+            failure_reason = None
+            if status == 'FAILED':
+                failure_reason = self._extract_failure_reason(content, match.end())
+            self.test_results.append({
+                'test_suite_id': test_suite,
+                'test_case_id': test_case,
+                'status': status,
+                'failure_reason': failure_reason
+            })
+    
+    def _extract_failure_reason(self, content: str, start_pos: int, max_lines=10) -> str:
+        remaining = content[start_pos:]
+        lines = remaining.split('\n')[:max_lines]
+        error_patterns = [
+            r'AssertionError:\s*(.+)',
+            r'Error:\s*(.+)',
+            r'Exception:\s*(.+)',
+            r'Reason:\s*(.+)',
+        ]
+        for line in lines:
+            for pattern in error_patterns:
+                match = re.search(pattern, line)
+                if match:
+                    return match.group(1).strip()[:200]
+        for line in lines:
+            line = line.strip()
+            if line and not line.startswith('---'):
+                return line[:200]
+        return "Unknown failure reason"
+    
+    def calculate_similarity(self, str1: str, str2: str) -> float:
+        if not str1 or not str2:
+            return 0.0
+        return SequenceMatcher(None, str1.lower(), str2.lower()).ratio()
+    
+    def group_similar_failures(self):
+        failed_tests = [t for t in self.test_results if t['status'] == 'FAILED']
+        processed = set()
+        for i, test in enumerate(failed_tests):
+            if i in processed:
+                continue
+            reason = test['failure_reason'] or "Unknown"
+            group = [test]
+            processed.add(i)
+            for j, other_test in enumerate(failed_tests[i+1:], start=i+1):
+                if j in processed:
+                    continue
+                other_reason = other_test['failure_reason'] or "Unknown"
+                if self.calculate_similarity(reason, other_reason) >= self.similarity_threshold:
+                    group.append(other_test)
+                    processed.add(j)
+            self.failure_groups[reason] = group
+    
+    def get_statistics(self):
+        total = len(self.test_results)
+        passed = sum(1 for t in self.test_results if t['status'] == 'PASSED')
+        failed = total - passed
+        return {
+            'total_tests': total,
+            'passed': passed,
+            'failed': failed,
+            'pass_rate': f"{(passed/total*100):.2f}%" if total > 0 else "0%"
+        }
+    
+    def generate_report(self) -> str:
+        stats = self.get_statistics()
+        report = ["="*80, "TEST LOG ANALYSIS REPORT", "="*80, "",
+                  "STATISTICS:", f"Total: {stats['total_tests']}",
+                  f"Passed: {stats['passed']}", f"Failed: {stats['failed']}",
+                  f"Pass Rate: {stats['pass_rate']}", "", "GROUPED FAILURES:", "-"*40]
+        for i, (reason, tests) in enumerate(sorted(self.failure_groups.items(), 
+                                                    key=lambda x: len(x[1]), reverse=True), 1):
+            report.append(f"\n#{i} ({len(tests)} occurrences): {reason}")
+            for test in tests:
+                report.append(f"  - {test['test_suite_id']}::{test['test_case_id']}")
+        return "\n".join(report)
+    
+    def export_to_json(self, output_file: str):
+        data = {'statistics': self.get_statistics(), 'test_results': self.test_results,
+                'failure_groups': {reason: [{'suite': t['test_suite_id'], 
+                                             'case': t['test_case_id'],
+                                             'reason': t['failure_reason']} 
+                                           for t in tests]
+                                  for reason, tests in self.failure_groups.items()}}
+        with open(output_file, 'w') as f:
+            json.dump(data, f, indent=2)
+
+if __name__ == "__main__":
+    analyzer = TestLogAnalyzer(similarity_threshold=0.7)
+    analyzer.parse_log_file('sample_test_log.txt')
+    analyzer.group_similar_failures()
+    print(analyzer.generate_report())
+    analyzer.export_to_json('analysis.json')</code></pre>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>🚀 Quick Start</h2>
+            <pre><code># 1. Save the code as log_analyzer.py
+
+# 2. Create a sample log file or use your own
+# sample_test_log.txt
+
+# 3. Run the analyzer
+python log_analyzer.py
+
+# 4. Use in your code
+from log_analyzer import TestLogAnalyzer
+
+analyzer = TestLogAnalyzer(similarity_threshold=0.7)
+analyzer.parse_log_file('your_log.txt')
+analyzer.group_similar_failures()
+
+# Get statistics
+stats = analyzer.get_statistics()
+print(f"Total: {stats['total_tests']}, Failed: {stats['failed']}")
+
+# Generate report
+print(analyzer.generate_report())
+
+# Export to JSON
+analyzer.export_to_json('report.json')</code></pre>
+        </div>
+
+        <div class="section">
+            <h2>📋 Supported Log Formats</h2>
+            <ul>
+                <li><strong>Pytest:</strong> <code>tests/file.py::TestClass::test_method PASSED/FAILED</code></li>
+                <li><strong>JUnit:</strong> <code>[TestSuite] test_case: PASS/FAIL</code></li>
+                <li><strong>Generic:</strong> <code>Test: suite.test_name - PASSED/FAILED</code></li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>📊 What You Get</h2>
+            <ul>
+                <li>✅ Total test count with pass/fail breakdown</li>
+                <li>✅ Test suite and test case IDs for each test</li>
+                <li>✅ Failure reasons extracted from logs</li>
+                <li>✅ Similar failures grouped automatically</li>
+                <li>✅ Count of tests failed for each reason</li>
+                <li>✅ Comprehensive text report</li>
+                <li>✅ JSON export for further processing</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>⚙️ Configuration</h2>
+            <p><strong>Similarity Threshold:</strong> Controls how strictly failures are grouped (0.0 to 1.0)</p>
+            <ul>
+                <li><code>0.5</code> - Loose grouping (more failures grouped together)</li>
+                <li><code>0.7</code> - Default (balanced)</li>
+                <li><code>0.9</code> - Strict (only very similar failures grouped)</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>💡 Example Output</h2>
+            <pre><code>================================================================================
+TEST LOG ANALYSIS REPORT
+================================================================================
+
+STATISTICS:
+Total: 15
+Passed: 8
+Failed: 7
+Pass Rate: 53.33%
+
+GROUPED FAILURES:
+----------------------------------------
+
+#1 (3 occurrences): Connection timeout after 30 seconds
+  - tests/test_database.py::TestDB::test_query
+  - tests/test_api.py::TestAPI::test_update
+  - performance.test_load
+
+#2 (2 occurrences): Expected 200, got 500
+  - tests/test_api.py::TestAPI::test_get_users
+  - unit.test_sanitize</code></pre>
+        </div>
+    </div>
+</body>
+</html>
